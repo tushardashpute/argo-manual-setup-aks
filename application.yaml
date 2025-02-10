@@ -1,0 +1,17 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata: 
+  name: springboot
+  namespace: argocd
+spec: 
+  destination: 
+    namespace: test
+    server: "https://kubernetes.default.svc"
+  project: default
+  source:
+      path: springboot
+      repoURL: https://github.com/tushardashpute/argo-manual-setup-aks.git
+      targetRevision: master
+  syncPolicy:
+    syncOptions:
+      - CreateNamespace=true
