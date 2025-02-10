@@ -1,70 +1,145 @@
-# argo-manual-setup-aks
+# Deploy ArgoCD to AKS and Deploy a Sample Spring Boot Application
 
-Pre-requisites:
---------------
-1. Running AKS cluster
+This guide provides step-by-step instructions to deploy **ArgoCD** to an **Azure Kubernetes Service (AKS)** cluster and then use ArgoCD to deploy a sample **Spring Boot** application.
 
+## **Prerequisites**
+Ensure you have the following installed:
 
-Installation Options:
----------------------
-You need to create a namespace for argocd.
+- **Azure CLI**: [Install Guide](https://docs.microsoft.com/en-us/cli/azure/install-azure-cli)
+- **Kubectl**: [Install Guide](https://kubernetes.io/docs/tasks/tools/install-kubectl/)
+- **ArgoCD CLI**: [Install Guide](https://argo-cd.readthedocs.io/en/stable/getting_started/)
 
-    kubectl create ns argocd
+## **Step 1: Set Up AKS Cluster**
 
-and then choose one of the below options :
+Create an AKS cluster if you don’t already have one:
 
-**1. Non-HA:**
+```bash
+az login
+az group create --name argo-rg --location eastus
+az aks create --resource-group argo-rg --name argo-aks --node-count 2 --enable-managed-identity --generate-ssh-keys
+```
 
-    a. cluster-admin privileges: https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
-    
-    b. namespace level privileges: https://github.com/argoproj/argo-cd/raw/stable/manifests/namespace-install.yaml
+Retrieve the AKS credentials:
+```bash
+az aks get-credentials --resource-group argo-rg --name argo-aks
+```
 
-**2. HA:**
+Verify the cluster connection:
+```bash
+kubectl get nodes
+```
 
-    a. cluster-admin privileges: https://github.com/argoproj/argo-cd/raw/stable/manifests/ha/install.yaml
-    
-    b. namespace level privileges: https://github.com/argoproj/argo-cd/raw/stable/manifests/ha/namespace-install.yaml
+---
 
-**3. Light installation "Core"**
+## **Step 2: Install ArgoCD on AKS**
 
-    https://github.com/argoproj/argo-cd/raw/stable/manifests/core-install.yaml
+### **Install ArgoCD using Helm**
+```bash
+helm repo add argo https://argoproj.github.io/argo-helm
+helm repo update
+helm install argocd argo/argo-cd --namespace argocd --create-namespace
+```
 
-**4. Helm chart:**
+### **Expose ArgoCD UI via LoadBalancer**
 
-   https://github.com/argoproj/argo-helm/tree/main/charts/argo-cd
+Patch the ArgoCD service to use LoadBalancer type:
+```bash
+kubectl patch svc argocd-server -n argocd -p '{"spec": {"type": "LoadBalancer"}}'
+```
 
-I am using N-n-HA setup with cluster-admin-privileges:
+Retrieve the external IP:
+```bash
+kubectl get svc argocd-server -n argocd
+```
 
-    kubectl apply -n argocd -f  https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
+Once the LoadBalancer is ready, access ArgoCD at:
+```bash
+https://<EXTERNAL-IP>
+```
 
-Get the admin password:
+Retrieve the ArgoCD admin password:
+```bash
+kubectl get secret argocd-initial-admin-secret -n argocd -o jsonpath="{.data.password}" | base64 --decode
+```
 
-    kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath="{.data.password}" | base64 -d; echo
+Login to ArgoCD:
+```bash
+argocd login <EXTERNAL-IP> --username admin --password <retrieved-password>
+```
 
-ArgoCD CLI installation:
+Change the admin password (optional):
+```bash
+argocd account update-password
+```
 
-    https://argo-cd.readthedocs.io/en/stable/cli_installation/
+---
 
-    VERSION=$(curl -L -s https://raw.githubusercontent.com/argoproj/argo-cd/stable/VERSION)
-    curl -sSL -o argocd-linux-amd64 https://github.com/argoproj/argo-cd/releases/download/v$VERSION/argocd-linux-amd64
-    sudo install -m 555 argocd-linux-amd64 /usr/local/bin/argocd
-    rm argocd-linux-amd64
+## **Step 3: Deploy the Spring Boot Application**
 
-Login to argocd using CLI:
+### **Create an ArgoCD Application**
 
-    argocd login WEB_SERVER_URI
+Apply the following YAML configuration to create an ArgoCD application in the `test` namespace:
 
-Enter admin as user and enter the password that you got previously.
+```yaml
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: springboot-app
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/tushardashpute/argo-manual-setup-aks.git
+    path: springboot
+    targetRevision: master
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: test
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+```
 
-    ex.  argocd login 172.30.1.2:32073 --grpc-web --plaintext
-        Username: admin 
-        Password: 
-        'admin:login' logged in successfully
-        Context '172.30.1.2:32073' updated
+Apply the configuration:
+```bash
+kubectl apply -f springboot-app.yaml
+```
 
-After successful login you can start using other commands such as listing apps or clusters.
+### **Verify the Deployment**
+```bash
+argocd app list
+argocd app get springboot-app
+```
 
-    argocd cluster list --grpc-web
+Once the application is successfully deployed, check the running pods:
+```bash
+kubectl get pods -n test
+```
 
-Deploy Application
-------------------
+---
+
+## **Step 4: Access the Spring Boot Application**
+
+Retrieve the service details:
+```bash
+kubectl get svc -n test
+```
+
+If the application is exposed via a LoadBalancer, fetch the external IP:
+```bash
+kubectl get svc springboot-app -n test
+```
+
+Access the application in your browser:
+```bash
+http://<EXTERNAL-IP>:<PORT>
+```
+
+---
+
+## **Conclusion**
+You have successfully deployed **ArgoCD** to an **AKS cluster** and used it to manage a **Spring Boot application** in the `test` namespace. You can now leverage ArgoCD’s automated deployment capabilities to manage further updates to your application.
+
+For more details, visit the [ArgoCD documentation](https://argo-cd.readthedocs.io/en/stable/).
+
