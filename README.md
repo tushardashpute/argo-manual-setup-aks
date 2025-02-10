@@ -57,6 +57,9 @@ Once the LoadBalancer is ready, access ArgoCD at:
 https://<EXTERNAL-IP>
 ```
 
+![image](https://github.com/user-attachments/assets/dd47a094-5915-43a1-b031-205a901b75c3)
+
+
 Retrieve the ArgoCD admin password:
 ```bash
 kubectl get secret argocd-initial-admin-secret -n argocd -o jsonpath="{.data.password}" | base64 --decode
@@ -91,7 +94,7 @@ spec:
   source:
     repoURL: https://github.com/tushardashpute/argo-manual-setup-aks.git
     path: springboot
-    targetRevision: master
+    targetRevision: main
   destination:
     server: https://kubernetes.default.svc
     namespace: test
@@ -112,10 +115,46 @@ argocd app list
 argocd app get springboot-app
 ```
 
+    $ argocd app list
+    NAME                   CLUSTER                         NAMESPACE  PROJECT  STATUS  HEALTH       SYNCPOLICY  CONDITIONS  REPO                                                         PATH        TARGET
+    argocd/springboot-app  https://kubernetes.default.svc  test       default  Synced  Progressing  Auto-Prune  <none>      https://github.com/tushardashpute/argo-manual-setup-aks.git  springboot  main
+    
+    $ argocd app get springboot-app
+    Name:               argocd/springboot-app
+    Project:            default
+    Server:             https://kubernetes.default.svc
+    Namespace:          test
+    URL:                https://48.216.193.10/applications/springboot-app
+    Source:
+    - Repo:             https://github.com/tushardashpute/argo-manual-setup-aks.git
+      Target:           main
+      Path:             springboot
+    SyncWindow:         Sync Allowed
+    Sync Policy:        Automated (Prune)
+    Sync Status:        Synced to main (5e9b0f7)
+    Health Status:      Healthy
+    
+    GROUP  KIND        NAMESPACE  NAME        STATUS  HEALTH   HOOK  MESSAGE
+           Service     test       springboot  Synced  Healthy        service/springboot created
+    apps   Deployment  test       springboot  Synced  Healthy        deployment.apps/springboot created
+
+We can check the same in the UI as well:
+
+![image](https://github.com/user-attachments/assets/14148d0b-2513-49a0-b800-8494d154f909)
+
+![image](https://github.com/user-attachments/assets/05fe2827-9c09-47a8-9f53-206cd2a44a06)
+
+
 Once the application is successfully deployed, check the running pods:
 ```bash
 kubectl get pods -n test
 ```
+
+    $ k get pods -n test
+    NAME                          READY   STATUS    RESTARTS   AGE
+    springboot-56b59b8d5b-nw6h7   1/1     Running   0          33s
+    springboot-56b59b8d5b-pd2bz   1/1     Running   0          33s
+    springboot-56b59b8d5b-sj6v2   1/1     Running   0          33s
 
 ---
 
